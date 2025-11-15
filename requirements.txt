@@ -6,3 +6,5 @@ torch
 accelerate
 PyPDF2
 python-docx
+openpyxl
+xlsxwriter

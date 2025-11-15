@@ -77,9 +77,12 @@ class DataCollectionManager:
             df_dialog = pd.DataFrame(dialog_data)
             df_dialog.to_csv(dialog_file_csv, index=False, encoding='utf-8')
             
-            # Сохраняем в Excel
-            dialog_file_xlsx = os.path.join(self.dialogs_dir, f"{dialog_id}.xlsx")
-            df_dialog.to_excel(dialog_file_xlsx, index=False)
+            # Пытаемся сохранить в Excel, но если не получится - используем только CSV
+            try:
+                dialog_file_xlsx = os.path.join(self.dialogs_dir, f"{dialog_id}.xlsx")
+                df_dialog.to_excel(dialog_file_xlsx, index=False, engine='openpyxl')
+            except ImportError:
+                st.warning("📝 Модуль openpyxl не установлен. Excel файлы не будут создаваться.")
             
             return True
         except Exception as e:
@@ -106,9 +109,12 @@ class DataCollectionManager:
             # Сохраняем в CSV
             df.to_csv(self.summary_file, index=False, encoding='utf-8')
             
-            # Сохраняем в Excel
-            summary_file_xlsx = os.path.join(self.data_dir, "evaluation_summary.xlsx")
-            df.to_excel(summary_file_xlsx, index=False)
+            # Пытаемся сохранить в Excel
+            try:
+                summary_file_xlsx = os.path.join(self.data_dir, "evaluation_summary.xlsx")
+                df.to_excel(summary_file_xlsx, index=False, engine='openpyxl')
+            except ImportError:
+                pass  # Просто пропускаем если Excel не доступен
             
             return True
         except Exception as e:
@@ -128,11 +134,14 @@ class DataCollectionManager:
                 prompts_csv = os.path.join(self.data_dir, "system_prompts.csv")
                 df_prompts.to_csv(prompts_csv, index=False, encoding='utf-8')
                 
-                # Сохраняем в Excel
-                prompts_xlsx = os.path.join(self.data_dir, "system_prompts.xlsx")
-                df_prompts.to_excel(prompts_xlsx, index=False)
-                
-                return True
+                # Пытаемся сохранить в Excel
+                try:
+                    prompts_xlsx = os.path.join(self.data_dir, "system_prompts.xlsx")
+                    df_prompts.to_excel(prompts_xlsx, index=False, engine='openpyxl')
+                    return True
+                except ImportError:
+                    st.warning("🔶 Excel экспорт недоступен. Установите openpyxl: pip install openpyxl")
+                    return True  # Все равно возвращаем True, т.к. CSV сохранен
             return False
         except Exception as e:
             st.error(f"❌ Ошибка экспорта системных промптов: {e}")
@@ -192,6 +201,7 @@ class DataCollectionManager:
         except:
             return []
 
+# Остальной код остается без изменений...
 class FileProcessor:
     """Класс для обработки загруженных файлов"""
     
@@ -830,8 +840,11 @@ def main():
             if st.button("💾 Экспорт всех данных", use_container_width=True):
                 with st.spinner("Экспортируем данные..."):
                     # Экспортируем системные промпты
-                    st.session_state.data_manager.save_system_prompts_export()
-                    st.success("✅ Все данные экспортированы!")
+                    success = st.session_state.data_manager.save_system_prompts_export()
+                    if success:
+                        st.success("✅ Все данные экспортированы!")
+                    else:
+                        st.error("❌ Ошибка при экспорте данных")
         
         with col2:
             if st.button("📊 Показать отчет", use_container_width=True):
