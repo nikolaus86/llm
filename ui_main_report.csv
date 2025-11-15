@@ -1,0 +1,4 @@
+model_name,model_parameters,lecture_title,lecture_topic,system_prompt_id,dialog_id,overall_rating,evaluation_notes
+Streamlit-AI-Assistant,Rule-Based,Метод k-ближайших соседей,Интуитивный подход к алгоритму kNN,prompt_ui_001,dialog_ui_fragment_001,9,UI версия успешно демонстрирует функциональность
+Streamlit-AI-Assistant,Rule-Based,Метод k-ближайших соседей,Вычисление расстояний в kNN,prompt_ui_001,dialog_ui_fragment_002,9,UI версия успешно демонстрирует функциональность
+Streamlit-AI-Assistant,Rule-Based,Линейная регрессия,Основные понятия линейной регрессии,prompt_ui_001,dialog_ui_fragment_003,9,UI версия успешно демонстрирует функциональность

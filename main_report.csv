@@ -1,0 +1,5 @@
+model_name,model_parameters,lecture_title,lecture_topic,system_prompt_id,dialog_id,overall_rating,evaluation_notes
+Qwen-2.5-1.5B,1.5B,Метод k-ближайших соседей,Интуитивный подход к алгоритму kNN,prompt_lecture_001,dialog_Qwen_2.5_1.5B_fragment_001,8,Модель Qwen-2.5-1.5B адекватно отвечает на вопросы по теме Интуитивный подход к алгоритму kNN
+Qwen-2.5-1.5B,1.5B,Метод k-ближайших соседей,Вычисление расстояний в kNN,prompt_lecture_001,dialog_Qwen_2.5_1.5B_fragment_002,8,Модель Qwen-2.5-1.5B адекватно отвечает на вопросы по теме Вычисление расстояний в kNN
+Qwen-2.5-7B,7B,Метод k-ближайших соседей,Интуитивный подход к алгоритму kNN,prompt_lecture_001,dialog_Qwen_2.5_7B_fragment_001,8,Модель Qwen-2.5-7B адекватно отвечает на вопросы по теме Интуитивный подход к алгоритму kNN
+Qwen-2.5-7B,7B,Метод k-ближайших соседей,Вычисление расстояний в kNN,prompt_lecture_001,dialog_Qwen_2.5_7B_fragment_002,8,Модель Qwen-2.5-7B адекватно отвечает на вопросы по теме Вычисление расстояний в kNN
