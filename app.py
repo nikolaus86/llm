@@ -11,6 +11,12 @@ import PyPDF2
 import io
 from docx import Document
 import tempfile
+import re
+import logging
+
+# Настройка логирования
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 warnings.filterwarnings("ignore")
 
 class DataCollectionManager:
@@ -48,6 +54,7 @@ class DataCollectionManager:
     def save_system_prompt(self, prompt_data: Dict):
         """Сохранение системного промпта"""
         try:
+            logger.info(f"Сохранение системного промпта с ID: {prompt_data['system_prompt_id']}")
             with open(self.system_prompts_file, 'r', encoding='utf-8') as f:
                 prompts = json.load(f)
             
@@ -55,106 +62,137 @@ class DataCollectionManager:
             existing_ids = [p['system_prompt_id'] for p in prompts]
             if prompt_data['system_prompt_id'] not in existing_ids:
                 prompts.append(prompt_data)
+                logger.info(f"Добавлен новый системный промпт: {prompt_data['system_prompt_id']}")
                 
                 with open(self.system_prompts_file, 'w', encoding='utf-8') as f:
                     json.dump(prompts, f, ensure_ascii=False, indent=2)
+                logger.info(f"Системный промпт успешно сохранен в файл: {self.system_prompts_file}")
+            else:
+                logger.info(f"Системный промпт с ID {prompt_data['system_prompt_id']} уже существует")
             
             return True
         except Exception as e:
+            logger.error(f"Ошибка сохранения системного промпта: {e}")
             st.error(f"❌ Ошибка сохранения системного промпта: {e}")
             return False
     
     def save_dialog_data(self, dialog_id: str, dialog_data: List[Dict]):
         """Сохранение данных диалога в JSON и CSV"""
         try:
+            logger.info(f"Сохранение данных диалога: {dialog_id}")
             # Сохраняем в JSON
             dialog_file_json = os.path.join(self.dialogs_dir, f"{dialog_id}.json")
             with open(dialog_file_json, 'w', encoding='utf-8') as f:
                 json.dump(dialog_data, f, ensure_ascii=False, indent=2)
+            logger.info(f"Диалог сохранен в JSON: {dialog_file_json}")
             
             # Сохраняем в CSV
             dialog_file_csv = os.path.join(self.dialogs_dir, f"{dialog_id}.csv")
             df_dialog = pd.DataFrame(dialog_data)
             df_dialog.to_csv(dialog_file_csv, index=False, encoding='utf-8')
+            logger.info(f"Диалог сохранен в CSV: {dialog_file_csv}")
             
             # Пытаемся сохранить в Excel, но если не получится - используем только CSV
             try:
                 dialog_file_xlsx = os.path.join(self.dialogs_dir, f"{dialog_id}.xlsx")
                 df_dialog.to_excel(dialog_file_xlsx, index=False, engine='openpyxl')
+                logger.info(f"Диалог сохранен в Excel: {dialog_file_xlsx}")
             except ImportError:
+                logger.warning("Модуль openpyxl не установлен. Excel файлы не будут создаваться.")
                 st.warning("📝 Модуль openpyxl не установлен. Excel файлы не будут создаваться.")
             
+            logger.info(f"Данные диалога {dialog_id} успешно сохранены")
             return True
         except Exception as e:
+            logger.error(f"Ошибка сохранения диалога: {e}")
             st.error(f"❌ Ошибка сохранения диалога: {e}")
             return False
     
     def save_evaluation_summary(self, summary_data: Dict):
         """Сохранение общей оценки диалога"""
         try:
+            logger.info(f"Сохранение общей оценки диалога: {summary_data['dialog_id']}")
             # Загружаем существующие данные
             if os.path.exists(self.summary_file):
                 df = pd.read_csv(self.summary_file)
+                logger.info("Загружены существующие данные оценки")
             else:
                 df = pd.DataFrame(columns=[
-                    'model_name', 'model_parameters', 'lecture_title', 
+                    'model_name', 'model_parameters', 'lecture_title',
                     'lecture_topic', 'system_prompt_id', 'dialog_id',
                     'overall_rating', 'evaluation_notes'
                 ])
+                logger.info("Создана новая таблица оценки")
             
             # Добавляем новую строку
             new_row = pd.DataFrame([summary_data])
             df = pd.concat([df, new_row], ignore_index=True)
+            logger.info("Добавлена новая строка оценки")
             
             # Сохраняем в CSV
             df.to_csv(self.summary_file, index=False, encoding='utf-8')
+            logger.info(f"Общая оценка сохранена в CSV: {self.summary_file}")
             
             # Пытаемся сохранить в Excel
             try:
                 summary_file_xlsx = os.path.join(self.data_dir, "evaluation_summary.xlsx")
                 df.to_excel(summary_file_xlsx, index=False, engine='openpyxl')
+                logger.info(f"Общая оценка сохранена в Excel: {summary_file_xlsx}")
             except ImportError:
+                logger.warning("Excel не доступен для сохранения общей оценки")
                 pass  # Просто пропускаем если Excel не доступен
             
+            logger.info(f"Общая оценка диалога {summary_data['dialog_id']} успешно сохранена")
             return True
         except Exception as e:
+            logger.error(f"Ошибка сохранения общей оценки: {e}")
             st.error(f"❌ Ошибка сохранения общей оценки: {e}")
             return False
     
     def save_system_prompts_export(self):
         """Экспорт системных промптов в CSV и Excel"""
         try:
+            logger.info("Экспорт системных промптов")
             with open(self.system_prompts_file, 'r', encoding='utf-8') as f:
                 prompts = json.load(f)
+            logger.info(f"Загружено {len(prompts)} системных промптов")
             
             if prompts:
                 df_prompts = pd.DataFrame(prompts)
                 
                 # Сохраняем в CSV
                 prompts_csv = os.path.join(self.data_dir, "system_prompts.csv")
-                df_prompts.to_csv(prompts_csv, index=False, encoding='utf-8')
+                df_prompts.to_csv(prompts_csv, index=False, encoding='utf-8', sep="|")
+                logger.info(f"Системные промпты экспортированы в CSV: {prompts_csv}")
                 
                 # Пытаемся сохранить в Excel
                 try:
                     prompts_xlsx = os.path.join(self.data_dir, "system_prompts.xlsx")
                     df_prompts.to_excel(prompts_xlsx, index=False, engine='openpyxl')
+                    logger.info(f"Системные промпты экспортированы в Excel: {prompts_xlsx}")
                     return True
                 except ImportError:
+                    logger.warning("Excel экспорт недоступен. Установите openpyxl: pip install openpyxl")
                     st.warning("🔶 Excel экспорт недоступен. Установите openpyxl: pip install openpyxl")
                     return True  # Все равно возвращаем True, т.к. CSV сохранен
+            logger.info("Нет системных промптов для экспорта")
             return False
         except Exception as e:
+            logger.error(f"Ошибка экспорта системных промптов: {e}")
             st.error(f"❌ Ошибка экспорта системных промптов: {e}")
             return False
     
     def save_uploaded_file(self, file, filename: str) -> str:
         """Сохранение загруженного файла"""
         try:
+            logger.info(f"Сохранение загруженного файла: {filename}")
             file_path = os.path.join(self.materials_dir, filename)
             with open(file_path, 'wb') as f:
                 f.write(file.getbuffer())
+            logger.info(f"Файл успешно сохранен: {file_path}")
             return file_path
         except Exception as e:
+            logger.error(f"Ошибка сохранения файла {filename}: {e}")
             st.error(f"❌ Ошибка сохранения файла: {e}")
             return ""
     
@@ -209,19 +247,24 @@ class FileProcessor:
     def extract_text_from_pdf(file) -> str:
         """Извлечение текста из PDF файла"""
         try:
+            logger.info("Извлечение текста из PDF файла")
             # Сохраняем позицию файла
             current_position = file.tell()
             file.seek(0)
             
             pdf_reader = PyPDF2.PdfReader(file)
             text = ""
-            for page in pdf_reader.pages:
-                text += page.extract_text() + "\n"
+            for page_num, page in enumerate(pdf_reader.pages):
+                page_text = page.extract_text()
+                text += page_text + "\n"
+                logger.debug(f"Извлечено текста со страницы {page_num + 1}: {len(page_text)} символов")
             
             # Возвращаем позицию файла
             file.seek(current_position)
+            logger.info(f"Успешно извлечено {len(text)} символов из PDF")
             return text
         except Exception as e:
+            logger.error(f"Ошибка чтения PDF: {e}")
             st.error(f"❌ Ошибка чтения PDF: {e}")
             return ""
     
@@ -229,16 +272,19 @@ class FileProcessor:
     def extract_text_from_txt(file) -> str:
         """Извлечение текста из TXT файла"""
         try:
+            logger.info("Извлечение текста из TXT файла")
             # Сохраняем позицию файла
             current_position = file.tell()
             file.seek(0)
             
             text = file.getvalue().decode('utf-8')
+            logger.info(f"Успешно извлечено {len(text)} символов из TXT")
             
             # Возвращаем позицию файла
             file.seek(current_position)
             return text
         except Exception as e:
+            logger.error(f"Ошибка чтения TXT: {e}")
             st.error(f"❌ Ошибка чтения TXT: {e}")
             return ""
     
@@ -246,19 +292,24 @@ class FileProcessor:
     def extract_text_from_docx(file) -> str:
         """Извлечение текста из DOCX файла"""
         try:
+            logger.info("Извлечение текста из DOCX файла")
             # Сохраняем позицию файла
             current_position = file.tell()
             file.seek(0)
             
             doc = Document(file)
             text = ""
+            paragraph_count = 0
             for paragraph in doc.paragraphs:
                 text += paragraph.text + "\n"
+                paragraph_count += 1
             
+            logger.info(f"Успешно извлечено {len(text)} символов из DOCX ({paragraph_count} параграфов)")
             # Возвращаем позицию файла
             file.seek(current_position)
             return text
         except Exception as e:
+            logger.error(f"Ошибка чтения DOCX: {e}")
             st.error(f"❌ Ошибка чтения DOCX: {e}")
             return ""
 
@@ -292,6 +343,7 @@ class NeuralNetworkManager:
     def setup_huggingface(self, model_name: str):
         """Настройка подключения к HuggingFace с открытыми моделями"""
         try:
+            logger.info(f"Настройка подключения к HuggingFace для модели: {model_name}")
             from transformers import AutoTokenizer, AutoModelForCausalLM, pipeline
             import torch
             
@@ -299,6 +351,7 @@ class NeuralNetworkManager:
             model_path = model_info["path"]
             
             st.info(f"🔄 Загружаем модель {model_name}... Это может занять несколько минут")
+            logger.info(f"Загрузка модели {model_name} из {model_path}")
             
             # Загружаем токеназер и модель
             tokenizer = AutoTokenizer.from_pretrained(model_path)
@@ -332,24 +385,30 @@ class NeuralNetworkManager:
             self.current_model = pipe
             self.current_model_name = model_name
             self.current_model_params = model_info["params"]
+            logger.info(f"Модель {model_name} успешно загружена и настроена")
             return True
                 
-        except ImportError:
+        except ImportError as e:
+            logger.error(f"Для использования HuggingFace установите необходимые пакеты: {e}")
             st.error("❌ Для использования HuggingFace установите: pip install transformers torch accelerate")
             return False
         except Exception as e:
+            logger.error(f"Ошибка загрузки модели {model_name}: {str(e)}")
             st.error(f"❌ Ошибка загрузки модели: {str(e)}")
             return False
     
     def setup_ollama(self, model_name: str, base_url: str = "http://localhost:11434"):
         """Настройка подключения к Ollama"""
         try:
+            logger.info(f"Настройка подключения к Ollama для модели: {model_name}")
             # Проверяем доступность Ollama
             response = requests.get(f"{base_url}/api/tags", timeout=10)
+            logger.info(f"Проверка доступности Ollama по адресу {base_url}")
             if response.status_code == 200:
                 available_models = [model["name"] for model in response.json().get("models", [])]
                 model_info = self.available_models["Ollama"][model_name]
                 selected_model = model_info["path"]
+                logger.info(f"Доступные модели в Ollama: {available_models}")
                 
                 if selected_model in available_models:
                     self.current_provider = "ollama"
@@ -357,39 +416,53 @@ class NeuralNetworkManager:
                     self.current_model_name = model_name
                     self.current_model_params = model_info["params"]
                     self.ollama_url = base_url
+                    logger.info(f"Успешно подключено к Ollama. Модель: {selected_model}")
                     return True
                 else:
+                    logger.warning(f"Модель {selected_model} не найдена в Ollama")
                     st.error(f"❌ Модель {selected_model} не найдена в Ollama. Скачайте её командой: ollama pull {selected_model}")
                     return False
             else:
+                logger.error(f"Ollama не доступен. Код ответа: {response.status_code}")
                 st.error("❌ Ollama не доступен. Убедитесь, что Ollama запущен.")
                 return False
                 
         except Exception as e:
+            logger.error(f"Ошибка подключения к Ollama: {e}")
             st.error(f"❌ Ошибка подключения к Ollama: {e}")
             return False
     
     def setup_openrouter(self, model_name: str, api_key: str):
         """Настройка подключения к OpenRouter"""
-        if not api_key:
-            st.error("❌ Введите API ключ для OpenRouter")
-            return False
+        try:
+            logger.info(f"Настройка подключения к OpenRouter для модели: {model_name}")
+            if not api_key:
+                logger.warning("API ключ для OpenRouter не предоставлен")
+                st.error("❌ Введите API ключ для OpenRouter")
+                return False
             
-        model_info = self.available_models["OpenRouter"][model_name]
-        
-        self.current_provider = "openrouter"
-        self.current_model = model_info["path"]
-        self.current_model_name = model_name
-        self.current_model_params = model_info["params"]
-        self.openrouter_key = api_key
-        return True
+            model_info = self.available_models["OpenRouter"][model_name]
+            
+            self.current_provider = "openrouter"
+            self.current_model = model_info["path"]
+            self.current_model_name = model_name
+            self.current_model_params = model_info["params"]
+            self.openrouter_key = api_key
+            logger.info(f"Успешно настроено подключение к OpenRouter. Модель: {model_info['path']}")
+            return True
+        except Exception as e:
+            logger.error(f"Ошибка настройки подключения к OpenRouter: {e}")
+            st.error(f"❌ Ошибка настройки подключения к OpenRouter: {e}")
+            return False
 
     def generate_response(self, prompt: str, system_prompt: str = None) -> str:
         """Генерация ответа через выбранный провайдер"""
         if not self.current_provider:
+            logger.warning("Провайдер не настроен для генерации ответа")
             return "❌ Провайдер не настроен. Выберите модель в настройках."
         
         try:
+            logger.info(f"Генерация ответа через провайдер: {self.current_provider}")
             if self.current_provider == "huggingface_local":
                 return self._generate_huggingface(prompt, system_prompt)
             elif self.current_provider == "ollama":
@@ -397,15 +470,19 @@ class NeuralNetworkManager:
             elif self.current_provider == "openrouter":
                 return self._generate_openrouter(prompt, system_prompt)
             else:
+                logger.error(f"Неизвестный провайдер: {self.current_provider}")
                 return "❌ Неизвестный провайдер"
                 
         except Exception as e:
+            logger.error(f"Ошибка генерации ответа: {str(e)}")
             return f"❌ Ошибка генерации: {str(e)}"
     
     def _generate_huggingface(self, prompt: str, system_prompt: str = None) -> str:
         """Генерация через локальную HuggingFace модель"""
         try:
+            logger.info("Генерация ответа через локальную HuggingFace модель")
             full_prompt = self._format_prompt(prompt, system_prompt)
+            logger.debug(f"Полный промпт для генерации: {full_prompt[:100]}...")
             
             outputs = self.current_model(
                 full_prompt,
@@ -418,6 +495,7 @@ class NeuralNetworkManager:
             )
             
             response = outputs[0]['generated_text']
+            logger.info(f"Ответ успешно сгенерирован через HuggingFace. Длина ответа: {len(response)} символов")
             
             # Убираем промпт из ответа
             if full_prompt in response:
@@ -426,17 +504,20 @@ class NeuralNetworkManager:
             return response
             
         except Exception as e:
+            logger.error(f"Ошибка генерации через HuggingFace: {str(e)}")
             return f"❌ Ошибка генерации HuggingFace: {str(e)}"
     
     def _generate_ollama(self, prompt: str, system_prompt: str = None) -> str:
         """Генерация через Ollama API"""
         try:
+            logger.info("Генерация ответа через Ollama API")
             messages = []
             
             if system_prompt:
                 messages.append({"role": "system", "content": system_prompt})
             
             messages.append({"role": "user", "content": prompt})
+            logger.debug(f"Отправка сообщений в Ollama: {messages}")
             
             data = {
                 "model": self.current_model,
@@ -453,24 +534,31 @@ class NeuralNetworkManager:
                 json=data,
                 timeout=120
             )
+            logger.info(f"Ответ от Ollama получен. Код статуса: {response.status_code}")
             
             if response.status_code == 200:
-                return response.json()["message"]["content"]
+                content = response.json()["message"]["content"]
+                logger.info(f"Ответ успешно сгенерирован через Ollama. Длина ответа: {len(content)} символов")
+                return content
             else:
+                logger.error(f"Ошибка Ollama API. Код статуса: {response.status_code}, Текст: {response.text}")
                 return f"❌ Ошибка Ollama: {response.text}"
                 
         except Exception as e:
+            logger.error(f"Ошибка генерации через Ollama: {str(e)}")
             return f"❌ Ошибка Ollama: {str(e)}"
     
     def _generate_openrouter(self, prompt: str, system_prompt: str = None) -> str:
         """Генерация через OpenRouter API"""
         try:
+            logger.info("Генерация ответа через OpenRouter API")
             messages = []
             
             if system_prompt:
                 messages.append({"role": "system", "content": system_prompt})
             
             messages.append({"role": "user", "content": prompt})
+            logger.debug(f"Отправка сообщений в OpenRouter: {messages}")
             
             headers = {
                 "Authorization": f"Bearer {self.openrouter_key}",
@@ -490,13 +578,18 @@ class NeuralNetworkManager:
                 json=data,
                 timeout=60
             )
+            logger.info(f"Ответ от OpenRouter получен. Код статуса: {response.status_code}")
             
             if response.status_code == 200:
-                return response.json()["choices"][0]["message"]["content"]
+                content = response.json()["choices"][0]["message"]["content"]
+                logger.info(f"Ответ успешно сгенерирован через OpenRouter. Длина ответа: {len(content)} символов")
+                return content
             else:
+                logger.error(f"Ошибка OpenRouter API. Код статуса: {response.status_code}, Текст: {response.text}")
                 return f"❌ Ошибка OpenRouter: {response.text}"
                 
         except Exception as e:
+            logger.error(f"Ошибка генерации через OpenRouter: {str(e)}")
             return f"❌ Ошибка OpenRouter: {str(e)}"
     
     def _format_prompt(self, prompt: str, system_prompt: str = None) -> str:
@@ -558,52 +651,89 @@ class CustomMaterialManager:
     
     def process_uploaded_file(self, uploaded_file) -> tuple:
         """Обработка загруженного файла и извлечение текста"""
+        logger.info(f"Обработка загруженного файла: {uploaded_file.name} (тип: {uploaded_file.type})")
         file_type = uploaded_file.type
         filename = uploaded_file.name
         
         # Сохраняем файл
         file_path = self.data_manager.save_uploaded_file(uploaded_file, filename)
+        if not file_path:
+            logger.error(f"Не удалось сохранить файл: {filename}")
+            return "", ""
+        logger.info(f"Файл успешно сохранен: {file_path}")
         
         # Извлекаем текст в зависимости от типа файла
         text = ""
         if file_type == "application/pdf":
+            logger.info("Извлечение текста из PDF файла")
             text = self.file_processor.extract_text_from_pdf(uploaded_file)
         elif file_type == "text/plain":
+            logger.info("Извлечение текста из TXT файла")
             text = self.file_processor.extract_text_from_txt(uploaded_file)
         elif file_type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
+            logger.info("Извлечение текста из DOCX файла")
             text = self.file_processor.extract_text_from_docx(uploaded_file)
         else:
+            logger.warning(f"Неподдерживаемый формат файла: {file_type}")
             st.error(f"❌ Неподдерживаемый формат файла: {file_type}")
             return "", ""
         
+        logger.info(f"Извлечение текста завершено. Извлечено {len(text)} символов")
         return text, file_path
 
 def init_session_state():
     """Инициализация состояния сессии"""
+    logger.info("Инициализация состояния сессии")
     if 'conversation' not in st.session_state:
         st.session_state.conversation = []
+        logger.debug("Инициализирован список conversation")
     if 'current_scenario' not in st.session_state:
         st.session_state.current_scenario = None
+        logger.debug("Инициализирован current_scenario")
     if 'nn_manager' not in st.session_state:
         st.session_state.nn_manager = NeuralNetworkManager()
+        logger.debug("Инициализирован nn_manager")
     if 'model_configured' not in st.session_state:
         st.session_state.model_configured = False
+        logger.debug("Инициализирован model_configured")
     if 'data_manager' not in st.session_state:
         st.session_state.data_manager = DataCollectionManager()
+        logger.debug("Инициализирован data_manager")
     if 'current_dialog_id' not in st.session_state:
         st.session_state.current_dialog_id = None
+        logger.debug("Инициализирован current_dialog_id")
     if 'evaluation_mode' not in st.session_state:
         st.session_state.evaluation_mode = False
+        logger.debug("Инициализирован evaluation_mode")
     if 'material_manager' not in st.session_state:
         st.session_state.material_manager = CustomMaterialManager(st.session_state.data_manager)
+        logger.debug("Инициализирован material_manager")
     if 'custom_materials' not in st.session_state:
         st.session_state.custom_materials = []
+        logger.debug("Инициализирован custom_materials")
     if 'extracted_text' not in st.session_state:
         st.session_state.extracted_text = None
+        logger.debug("Инициализирован extracted_text")
     if 'file_path' not in st.session_state:
         st.session_state.file_path = None
+        logger.debug("Инициализирован file_path")
+    logger.info("Состояние сессии полностью инициализировано")
+
+def render_with_latex(text: str):
+    """Отображение текста с поддержкой LaTeX"""
+    logger.debug(f"Отображение текста с поддержкой LaTeX. Длина текста: {len(text)} символов")
+    # Проверяем, содержит ли текст LaTeX выражения
+    if re.search(r'\$(.*?)\$', text) or re.search(r'\$\$(.*?)\$\$', text):
+        # Если есть LaTeX, используем st.markdown для рендеринга
+        logger.debug("Текст содержит LaTeX выражения, используем markdown рендеринг")
+        st.markdown(text)
+    else:
+        # Если нет LaTeX, отображаем как обычный текст
+        logger.debug("Текст не содержит LaTeX выражений, используем обычный рендеринг")
+        st.markdown(text)
 
 def main():
+    logger.info("Запуск приложения AI Ассистент с Нейросетями")
     st.set_page_config(
         page_title="AI Ассистент с Нейросетями",
         page_icon="🧠",
@@ -612,6 +742,7 @@ def main():
     )
     
     init_session_state()
+    logger.info("Состояние сессии инициализировано")
     
     # Сайдбар с настройками моделей и материалами
     with st.sidebar:
@@ -907,13 +1038,8 @@ def main():
             
             # Показываем материал с возможностью прокрутки
             st.markdown("**Содержание:**")
-            st.text_area(
-                "Материал",
-                value=scenario['material'],
-                height=300,
-                disabled=True,
-                label_visibility="collapsed"
-            )
+            # Используем st.markdown вместо st.text_area для поддержки LaTeX
+            st.markdown(scenario['material'])
             
             st.info(f"📊 Размер материала: {len(scenario['material'])} символов")
     else:
@@ -935,12 +1061,12 @@ def main():
         for i, message in enumerate(st.session_state.conversation):
             if message["role"] == "user":
                 with st.chat_message("user"):
-                    st.markdown(message["content"])
+                    render_with_latex(message["content"])
                     if st.session_state.evaluation_mode and "rating" in message:
                         st.caption(f"Оценка: {message['rating']}/10")
             else:
                 with st.chat_message("assistant"):
-                    st.markdown(message["content"])
+                    render_with_latex(message["content"])
                     if st.session_state.evaluation_mode and "rating" in message:
                         st.caption(f"Оценка: {message['rating']}/10")
             
@@ -990,13 +1116,16 @@ def main():
 
 def process_user_message(user_message: str):
     """Обработка сообщения пользователя с использованием нейросети"""
+    logger.info(f"Обработка сообщения пользователя: {user_message[:50]}...")
     if not st.session_state.current_scenario:
+        logger.warning("Попытка отправить сообщение без выбранного учебного материала")
         st.error("⚠️ Сначала выберите учебный материал!")
         return
     
     # Генерируем ID диалога если его нет
     if not st.session_state.current_dialog_id:
         st.session_state.current_dialog_id = st.session_state.data_manager.get_next_dialog_id()
+        logger.info(f"Сгенерирован новый ID диалога: {st.session_state.current_dialog_id}")
     
     # Добавляем сообщение пользователя
     user_message_data = {
@@ -1006,19 +1135,23 @@ def process_user_message(user_message: str):
         "timestamp": datetime.now().isoformat()
     }
     st.session_state.conversation.append(user_message_data)
+    logger.info(f"Сообщение пользователя добавлено в диалог. Общее количество сообщений: {len(st.session_state.conversation)}")
     
     # Генерируем ответ
     with st.spinner("🤖 AI генерирует ответ..."):
         scenario = st.session_state.current_scenario
+        logger.info(f"Генерация ответа для сценария: {scenario['title']} - {scenario['topic']}")
         
         # Формируем системный промпт
         system_prompt = scenario.get("system_prompt", "")
+        logger.debug(f"Используется системный промпт длиной: {len(system_prompt)} символов")
         
         # Добавляем контекст беседы
         conversation_context = "\n".join([
-            f"{'Студент' if msg['role'] == 'user' else 'Ассистент'}: {msg['content']}" 
+            f"{'Студент' if msg['role'] == 'user' else 'Ассистент'}: {msg['content']}"
             for msg in st.session_state.conversation[-4:]  # Берем последние 4 сообщения для контекста
         ])
+        logger.debug(f"Контекст беседы длиной: {len(conversation_context)} символов")
         
         full_prompt = f"""Контекст беседы:
 {conversation_context}
@@ -1029,9 +1162,11 @@ def process_user_message(user_message: str):
         
         if st.session_state.model_configured and st.session_state.nn_manager.current_provider != "demo":
             # Используем реальную нейросеть
+            logger.info("Генерация ответа с использованием реальной нейросети")
             response = st.session_state.nn_manager.generate_response(full_prompt, system_prompt)
         else:
             # Демо-режим
+            logger.info("Генерация ответа в демо-режиме")
             response = f"""🧠 **Демо-ответ нейросети**
 
 В реальном режиме здесь был бы ответ от AI-модели.
@@ -1045,22 +1180,26 @@ def process_user_message(user_message: str):
     # Добавляем ответ ассистента
     assistant_message_data = {
         "turn_number": len(st.session_state.conversation) + 1,
-        "role": "assistant", 
+        "role": "assistant",
         "content": response,
         "timestamp": datetime.now().isoformat(),
         "model_response": response
     }
     st.session_state.conversation.append(assistant_message_data)
+    logger.info(f"Ответ ассистента добавлен в диалог. Общее количество сообщений: {len(st.session_state.conversation)}")
     
     # Автоматически сохраняем диалог в режиме оценки
     if st.session_state.evaluation_mode:
+        logger.info("Режим оценки активен, сохраняем диалог в файл")
         save_dialog_to_file()
     
     st.rerun()
 
 def save_dialog_to_file():
     """Сохранение текущего диалога в файл"""
+    logger.info(f"Сохранение текущего диалога в файл: {st.session_state.current_dialog_id}")
     if not st.session_state.current_dialog_id:
+        logger.warning("Попытка сохранить диалог без ID")
         return
     
     dialog_data = []
@@ -1072,20 +1211,26 @@ def save_dialog_to_file():
             "model_response": msg.get("model_response", ""),
             "rating": msg.get("rating", None)
         })
+    logger.info(f"Подготовлено {len(dialog_data)} записей диалога для сохранения")
     
     success = st.session_state.data_manager.save_dialog_data(
-        st.session_state.current_dialog_id, 
+        st.session_state.current_dialog_id,
         dialog_data
     )
     
     if success:
         st.success(f"✅ Диалог {st.session_state.current_dialog_id} сохранен!")
+        logger.info(f"Диалог {st.session_state.current_dialog_id} успешно сохранен")
+    else:
+        logger.error(f"Не удалось сохранить диалог {st.session_state.current_dialog_id}")
 
 def save_evaluation_summary(overall_rating: int, evaluation_notes: str):
     """Сохранение общей оценки диалога"""
-    if not all([st.session_state.current_dialog_id, 
+    logger.info(f"Сохранение общей оценки диалога: {st.session_state.current_dialog_id}")
+    if not all([st.session_state.current_dialog_id,
                 st.session_state.current_scenario,
                 st.session_state.nn_manager.current_model_name]):
+        logger.warning("Недостаточно данных для сохранения оценки")
         st.error("❌ Недостаточно данных для сохранения оценки")
         return
     
@@ -1099,26 +1244,37 @@ def save_evaluation_summary(overall_rating: int, evaluation_notes: str):
         "overall_rating": overall_rating,
         "evaluation_notes": evaluation_notes
     }
+    logger.info(f"Данные оценки подготовлены: модель={summary_data['model_name']}, рейтинг={overall_rating}")
     
     success = st.session_state.data_manager.save_evaluation_summary(summary_data)
     if success:
+        logger.info("Общая оценка успешно сохранена, обновляем экспорт системных промптов")
         st.session_state.data_manager.save_system_prompts_export()
+    else:
+        logger.error("Не удалось сохранить общую оценку диалога")
 
 def save_current_dialog():
     """Сохранение текущего диалога при завершении"""
+    logger.info("Сохранение текущего диалога при завершении")
     if st.session_state.conversation and st.session_state.current_dialog_id:
+        logger.info("Вызов сохранения диалога в файл")
         save_dialog_to_file()
+    else:
+        logger.warning("Нет данных для сохранения диалога")
 
 def show_data_report():
     """Показать отчет по собранным данным"""
+    logger.info("Генерация отчета по собранным данным")
     try:
         st.subheader("📊 Отчет по собранным данным")
         
         # Основной файл отчета
         if os.path.exists(st.session_state.data_manager.summary_file):
+            logger.info(f"Загрузка основного файла отчета: {st.session_state.data_manager.summary_file}")
             df_summary = pd.read_csv(st.session_state.data_manager.summary_file)
             st.write("**Основной отчет:**")
             st.dataframe(df_summary)
+            logger.info(f"Основной отчет загружен. Количество записей: {len(df_summary)}")
             
             # Статистика
             col1, col2, col3 = st.columns(3)
@@ -1132,17 +1288,23 @@ def show_data_report():
                 st.metric("Уникальных моделей", df_summary['model_name'].nunique())
         
         # Системные промпты
+        logger.info("Загрузка системных промптов")
         prompts = st.session_state.data_manager.get_all_system_prompts()
         if prompts:
             st.write("**Системные промпты:**")
             st.dataframe(pd.DataFrame(prompts))
+            logger.info(f"Загружено {len(prompts)} системных промптов")
+        else:
+            logger.info("Системные промпты отсутствуют")
         
         # Диалоги
         if os.path.exists(st.session_state.data_manager.dialogs_dir):
             dialog_files = [f for f in os.listdir(st.session_state.data_manager.dialogs_dir) if f.endswith('.json')]
             st.write(f"**Сохраненные диалоги:** {len(dialog_files)}")
+            logger.info(f"Найдено сохраненных диалогов: {len(dialog_files)}")
             
     except Exception as e:
+        logger.error(f"Ошибка загрузки отчета: {e}")
         st.error(f"❌ Ошибка загрузки отчета: {e}")
 
 if __name__ == "__main__":
